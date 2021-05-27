@@ -112,7 +112,7 @@ smc <- function(y, N, t = NA, resampling=c("adaptive", "none", "each-step"), pro
       map_df <- cbind(x[x$k==(k-1) & x$i %in% non_zero_weights,3:4],w[w$k==(k-1) & w$i %in% non_zero_weights,"w"])
       colnames(map_df) <- c("lat", "lon", "w")
       # Heitetään pois pienet painot ja luodaan kartta
-      p_maps[[k]] <- ggplot(map_df, aes(x=lon, y=lat), alpha=w) + geom_point(shape=15, size=1.9) + annotate("point", x=22.2948889620602, y=60.4481932096263, color="steelblue") + geom_point(data=locator_coordinates, aes(x=lon, y=lat), color="tomato") + ylab("") + xlab(paste("k: ", k, "; N_eff: ", round(N_eff,0), sep="")) + theme(axis.title.x = element_text(size = rel(0.7)), axis.text.x=element_blank(), axis.text.y=element_blank())
+      p_maps[[k]] <- ggplot(map_df, aes(x=lon, y=lat), alpha=w) + geom_point(size=1.9) + annotate("point", x=22.2948889620602, y=60.4481932096263, color="steelblue", shape=15) + geom_point(data=locator_coordinates, aes(x=lon, y=lat), color="tomato") + ylab("") + xlab(paste("k: ", k, "; N_eff: ", round(N_eff,0), sep="")) + theme(axis.title.x = element_text(size = rel(0.7)), axis.text.x=element_blank(), axis.text.y=element_blank())
     }
     
     # Uudelleenotanta
