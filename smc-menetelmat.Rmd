@@ -1,0 +1,439 @@
+---
+title: "SMC-menetelmät ja SIR-algoritmi / Koetulokset"
+author: "Lasse Rintakumpu"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+header-includes:
+   - \usepackage{color}
+   - \usepackage{float}
+urlcolor: blue   
+output: pdf_document
+---
+
+```{r}
+# Tarvittavat kirjastot
+library(raster)
+library(tidyverse)
+library(data.table)
+library(rgeos)
+library(profvis)
+library(gridExtra)
+library(matrixStats)
+library(corrplot)
+library(reticulate)
+library(knitr)
+library(lubridate)
+library(pracma) # cot-funktio, jota ei löydy perus-R:stä
+library(MASS)
+library(microbenchmark)
+library(reshape2) 
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=15)
+```
+
+```{r}
+# Ladataan data
+smc_dataset <- read_csv2("data/smc_sir_data_60s_20210426.csv")
+
+# Luodaan datan peruusteella oma datasetti paikantimista
+locators <- smc_dataset %>% distinct(locator_mac, lat, lon)
+locators <- locators %>% mutate(locator_coordinates = paste("(", lon,",", lat, ")", sep=""))
+```
+
+```{r}
+# Ladataan algoritmifunktiot sekä uskottavuusfunktio
+# Funktiot dokumentoitu omassa lähdekoodissaan
+
+source("r/total.R") # ToTal-triangulaatioalgoritmi
+source("r/smc.R") # SMC-algoritmi
+source("r/p_yk_xk.R") # SMC-algoritmin käyttämä uskottavuusfunktio
+```
+
+```{r}
+# Prioriotanta, ei uudelleenotantaa
+set.seed(11)
+N <- 25^2
+t <- 60
+smc_output_prior_N25 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_prior_N25[[1]]) # 5.31
+
+set.seed(11)
+N <- 50^2
+t <- 60
+smc_output_prior_N50 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_prior_N50[[1]]) # 4.91
+
+set.seed(11)
+N <- 75^2
+t <- 60
+smc_output_prior_N75 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_prior_N75[[1]]) 4.82
+
+set.seed(11)
+N <- 100^2
+t <- 60
+smc_output_prior_N100 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_prior_N100[[1]]) 4.78
+
+# Uskottavuusotanta, ei uudelleenotantaa
+set.seed(11)
+N <- 25^2
+t <- 60
+smc_output_likelihood_N25 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_likelihood_N25[[1]]) 5.31
+
+set.seed(11)
+N <- 50^2
+t <- 60
+smc_output_likelihood_N50 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_likelihood_N50[[1]]) 4.90
+
+set.seed(11)
+N <- 75^2
+t <- 60
+smc_output_likelihood_N75 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_likelihood_N75[[1]]) 4.82
+
+set.seed(11)
+N <- 100^2
+t <- 60
+smc_output_likelihood_N100 <- smc(y=smc_dataset, N=N, t=t, max_plots=60, verbose=T, treshold = NA, proposal="likelihood", resampling = "none", plotting = T, grid = "random")
+# mean(smc_output_likelihood_N100[[1]]) 4.78
+
+# Prioriotanta, uudelleenotanta joka aika-askeleella
+set.seed(11)
+N <- 25^2
+t <- 60
+smc_output_eachstep_prior_N25 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_prior_N25[[1]]) 2.08
+
+set.seed(11)
+N <- 50^2
+t <- 60
+smc_output_eachstep_prior_N50 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_prior_N50[[1]]) 3.31
+
+set.seed(11)
+N <- 75^2
+t <- 60
+smc_output_eachstep_prior_N75 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_prior_N75[[1]]) 3.36
+
+set.seed(11)
+N <- 100^2
+t <- 60
+smc_output_eachstep_prior_N100 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="prior", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_prior_N100[[1]]) 2.93
+
+# Uskottavuusotanta, uudelleenotanta jokaisella aika-askeleella
+set.seed(11)
+N <- 25^2
+t <- 60
+smc_output_eachstep_likelihood_N25 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_likelihood_N25[[1]]) 2.08
+
+set.seed(11)
+N <- 50^2
+t <- 60
+smc_output_eachstep_likelihood_N50 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_likelihood_N50[[1]]) 3.81
+
+set.seed(11)
+N <- 75^2
+t <- 60
+smc_output_eachstep_likelihood_N75 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_likelihood_N75[[1]]) 2.24
+
+set.seed(11)
+N <- 100^2
+t <- 60
+smc_output_eachstep_likelihood_N100 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = T, grid = "random")
+# mean(smc_output_eachstep_likelihood_N100[[1]]) 0.33
+
+# Uskottavuusotanta, adaptiivinen uudelleenotanta
+set.seed(11)
+N <- 25^2
+t <- 60
+smc_output_adaptive_likelihood_N25 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = T, grid = "random")
+# mean(smc_output_adaptive_likelihood_N25[[1]]) 2.08
+
+set.seed(11)
+N <- 50^2
+t <- 60
+smc_output_adaptive_likelihood_N50 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = T, grid = "random")
+# mean(smc_output_adaptive_likelihood_N50[[1]]) 3.81
+
+set.seed(11)
+N <- 75^2
+t <- 60
+smc_output_adaptive_likelihood_N75 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = T, grid = "random")
+# mean(smc_output_adaptive_likelihood_N75[[1]]) 2.24
+
+set.seed(11)
+N <- 100^2
+t <- 60
+smc_output_adaptive_likelihood_N100 <- smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=T, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = T, grid = "random")
+# mean(smc_output_adaptive_likelihood_N100[[1]]) 2.24
+
+```
+
+```{r}
+# Keston mittaaminen kaikilla yo. parametreilla
+set.seed(11)
+N <- 25^2
+t <- 60
+mb_prior_N25 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "none", plotting = F, grid = "random"), times=100)
+#          min           lq          mean       median          uq          max neval
+# 6.236764909 7.2530151155 7.91095284947 7.6497081265 8.343321531 10.366807624   100
+
+set.seed(11)
+N <- 50^2
+t <- 60
+mb_prior_N50 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "none", plotting = F, grid = "random"), times=100)
+#  min           lq           mean       median           uq          max neval
+# 17.569195396 19.357619751 19.81382330826 19.820315296 20.268280615 22.141837771   100
+
+set.seed(11)
+N <- 75^2
+t <- 60
+mb_prior_N75 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "none", plotting = F, grid = "random"), times=100)
+# min           lq           mean        median           uq        max neval
+# 39.446681861 43.691234537 46.01998445511 46.1057252365 47.994973115 53.4721104   100
+
+set.seed(11)
+N <- 100^2
+t <- 60
+mb_prior_N100 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "none", plotting = F, grid = "random"), times=100)
+# min           lq           mean        median           uq          max neval
+# 73.539770973 80.667797495 81.82538028943 81.9399120405 83.195626004 86.133350034   100
+
+set.seed(11)
+N <- 25^2
+t <- 60
+mb_likelihood_N25 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "none", plotting = F, grid = "random"), times=100)
+#          min           lq          mean       median          uq         max neval
+# 6.339293291 6.9910968275 7.41935539825 7.5566299525 7.617074516 9.078088677   100
+
+set.seed(11)
+N <- 50^2
+t <- 60
+mb_likelihood_N50 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "none", plotting = F, grid = "random"), times=100)
+#         min          lq           mean       median          uq          max neval
+# 18.162996041 19.18839538 19.84497062833 19.811337178 20.25709638 22.925208162   100
+
+set.seed(11)
+N <- 75^2
+t <- 60
+mb_likelihood_N75 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "none", plotting = F, grid = "random"), times=100)
+#          min           lq           mean        median           uq         max neval
+# 40.484475592 43.620349323 45.94512770365 46.1387185215 47.999887242 53.57898935   100
+
+set.seed(11)
+N <- 100^2
+t <- 60
+mb_likelihood_N100 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "none", plotting = F, grid = "random"), times=100)
+#          min           lq           mean        median            uq         max neval
+# 75.392246363 80.781057255 82.02224973467 82.1280626805 83.2269076325 87.67391202   100
+
+set.seed(11)
+N <- 25^2
+t <- 60
+mb_eachstep_prior_N25 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "each-step", plotting = F, grid = "random"), times=100)
+#         min          lq          mean       median          uq         max neval
+# 6.028043426 6.987328907 7.41104531254 7.5671642065 7.648634222 9.177104048   100
+
+set.seed(11)
+N <- 50^2
+t <- 60
+mb_eachstep_prior_N50 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "each-step", plotting = F, grid = "random"), times=100)
+#          min           lq          mean        median           uq          max neval
+# 16.810143537 19.426497698 20.1826919513 20.1874235375 20.820334739 23.113704833   100
+
+set.seed(11)
+N <- 75^2
+t <- 60
+mb_eachstep_prior_N75 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "each-step", plotting = F, grid = "random"), times=100)
+#           min            lq           mean        median            uq          max neval
+# 37.934652123 43.9461928285 46.46514991328 46.3900502155 49.0538338145 55.207012437   100
+
+set.seed(11)
+N <- 100^2
+t <- 60
+mb_eachstep_prior_N100 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="prior", resampling = "each-step", plotting = F, grid = "random"), times=10)
+#          min           lq          mean        median           uq          max neval
+# 78.999725959 80.625230516 83.9042838935 83.1967271415 86.167550272 93.833590898    10
+
+set.seed(11)
+N <- 25^2
+t <- 60
+mb_eachstep_likelihood_N25 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = F, grid = "random"), times=10)
+#          min          lq         mean      median          uq          max neval
+# 6.925913757 7.783716075 8.6369624667 8.875759263 9.350679792 10.400935644    10
+
+set.seed(11)
+N <- 50^2
+t <- 60
+mb_eachstep_likelihood_N50 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = F, grid = "random"), times=10)
+#         min           lq          mean       median           uq          max neval
+# 18.430146744 20.496960039 21.5509986841 21.711516769 22.610969371 24.575349792    10
+
+set.seed(11)
+N <- 75^2
+t <- 60
+mb_eachstep_likelihood_N75 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = F, grid = "random"), times=10)
+# min           lq         mean        median           uq          max neval
+# 39.272074735 43.814903093 45.881378344 45.2432388455 48.205516625 51.119029569    10
+
+set.seed(11)
+N <- 100^2
+t <- 60
+mb_eachstep_likelihood_N100 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "each-step", plotting = F, grid = "random"), times=10)
+#          min           lq          mean        median           uq          max neval
+# 75.059766501 80.703083692 82.2378917629 81.9393074665 83.683012577 88.800068854    10
+
+set.seed(11)
+N <- 25^2
+t <- 60
+mb_adaptive_likelihood_N25 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = F, grid = "random"), times=10)
+#min          lq         mean       median          uq         max neval
+# 6.680161482 6.799910924 7.2976222682 7.4055343785 7.498463643 8.160768256    10
+
+set.seed(11)
+N <- 50^2
+t <- 60
+mb_adaptive_likelihood_N50 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = F, grid = "random"), times=10)
+#           min           lq          mean       median          uq          max neval
+# 17.036442657 18.104888832 18.5848565304 18.549061357 19.10558986 20.175728628    10
+
+set.seed(11)
+N <- 75^2
+t <- 60
+mb_adaptive_likelihood_N75 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = F, grid = "random"), times=10)
+#         min           lq          mean        median           uq          max neval
+# 38.076556719 40.661918706 42.1058445341 41.6337904545 44.170074266 45.960434467    10
+
+set.seed(11)
+N <- 100^2
+t <- 60
+mb_adaptive_likelihood_N100 <- microbenchmark(smc(y=smc_dataset, N=N, t=t, max_plots=10, verbose=F, treshold = NA, proposal="likelihood", resampling = "adaptive", plotting = F, grid = "random"), times=10)
+#          min           lq          mean      median           uq          max neval
+# 71.738842089 75.358038366 79.6436784391 79.46797876 84.781028082 86.857431774    10
+```
+
+```{r}
+# Partikkelit kartalla
+grid.arrange(smc_output_likelihood_N100[[4]][[1]], smc_output_likelihood_N100[[4]][[3]], smc_output_likelihood_N100[[4]][[5]], smc_output_likelihood_N100[[4]][[10]], nrow=1, ncol=4)
+
+grid.arrange(smc_output_adaptive_likelihood_N100[[4]][[1]], smc_output_adaptive_likelihood_N100[[4]][[3]], smc_output_adaptive_likelihood_N100[[4]][[5]], smc_output_adaptive_likelihood_N100[[4]][[10]], nrow=1, ncol=4)
+```
+
+```{r}
+# ToTaL, alustetaan tulosvektorit
+e_total <- rep(NA, (t))
+D_total <- rep(NA, (t))
+p_maps_total <- list(rep(NA, (t)))
+k_total <- 1
+
+# Muutetaan datasetti data.table-muotoon
+y <- as.data.table(smc_dataset)
+for(k_ts in unique(y$ts)) {
+  
+  # Valitaan oikea ajjanhetki
+  y_subset <- y[y$ts==k_ts]
+  
+  # Ajetaan ToTal
+  total_result <- total(y_subset, angle_statistic = "max_snr")
+  if(total_result[[1]] == "not enough valid angles" | total_result[[1]] == "not enough angles") {
+    next
+  }
+  
+  # Tallennetaan sijainti kartalle ja tallennetaan
+  p_maps_total[[k_total]] <- ggplot(locator_coordinates, aes(x=lon, y=lat, color="tomato")) + geom_point() + annotate("point", x=22.2948889620602, y=60.4481932096263, color="steelblue") + annotate("point", x=total_result[[1]][1], y=total_result[[1]][2], color="steelblue", shape=15, size=1.9)
+    
+  # Lasketaan paikannusvirhe
+  e_total[k_total] <- pointDistance(c(total_result[[1]][1],total_result[[1]][2]),c(22.2948889620602, 60.4481932096263), lonlat = T)
+  D_total[k_total] <- total_result[[5]]
+  
+  # Päivitetään aika
+  k_total <- k_total + 1
+}
+```
+
+
+```{r}
+# Vertailuplotit, prioriotanta vs. uskottavuusotanta
+prior_table <- cbind(smc_output_prior_N25[[1]], smc_output_prior_N50[[1]], smc_output_prior_N75[[1]], smc_output_prior_N100[[1]], e_total)
+colnames(prior_table) <- c("N=25^2","N=50^2","N=75^2","N=100^2","ToTal")
+prior_table_long <- melt(prior_table)
+colnames(prior_table_long) <- c("k", "Algoritmi", "Paikannusvirhe")
+prior_plot <- ggplot(prior_table_long, aes(x=k, y=Paikannusvirhe, linetype=Algoritmi)) + geom_line(color="black") + geom_point(data=(prior_table_long %>% subset(k %% 3 == 0)), aes(shape=Algoritmi), color="black") + ylim(0,5) 
+
+likelihood_table <- cbind(smc_output_likelihood_N25[[1]], smc_output_likelihood_N50[[1]], smc_output_likelihood_N75[[1]], smc_output_likelihood_N100[[1]], e_total)
+colnames(likelihood_table) <- c("N=25^2","N=50^2","N=75^2","N=100^2","ToTal")
+likelihood_table_long <- melt(likelihood_table)
+colnames(likelihood_table_long) <- c("k", "Algoritmi", "Paikannusvirhe")
+likelihood_plot <- ggplot(likelihood_table_long, aes(x=k, y=Paikannusvirhe, linetype=Algoritmi)) + geom_line(color="black") + geom_point(data=(likelihood_table_long %>% subset(k %% 3 == 0)), aes(shape=Algoritmi), color="black") + ylim(0,5)
+
+grid.arrange(prior_plot, likelihood_plot, ncol=2)
+```
+
+```{r}
+# Vertailuplotit, uudelleenotanta joka iteraatiolla vs. adaptiivinen uudelleenotanta
+
+eachstep_likelihood_table <- cbind(smc_output_eachstep_likelihood_N25[[1]], smc_output_eachstep_likelihood_N50[[1]], smc_output_eachstep_likelihood_N75[[1]], smc_output_eachstep_likelihood_N100[[1]], e_total)
+colnames(eachstep_likelihood_table) <- c("N=25^2","N=50^2","N=75^2","N=100^2","ToTal")
+eachstep_likelihood_table_long <- melt(eachstep_likelihood_table)
+colnames(eachstep_likelihood_table_long) <- c("k", "Algoritmi", "Paikannusvirhe")
+eachstep_plot <- ggplot(eachstep_likelihood_table_long, aes(x=k, y=Paikannusvirhe, linetype=Algoritmi)) + geom_line(color="black") + geom_point(data=(eachstep_likelihood_table_long %>% subset(k %% 3 == 0)), aes(shape=Algoritmi), color="black") + ylim(0,5)
+
+adaptive_likelihood_table <- cbind(smc_output_adaptive_likelihood_N25[[1]], smc_output_adaptive_likelihood_N50[[1]], smc_output_adaptive_likelihood_N75[[1]], smc_output_adaptive_likelihood_N100[[1]], e_total)
+colnames(adaptive_likelihood_table) <- c("N=25^2","N=50^2","N=75^2","N=100^2","ToTal")
+adaptive_likelihood_table_long <- melt(adaptive_likelihood_table)
+colnames(adaptive_likelihood_table_long) <- c("k", "Algoritmi", "Paikannusvirhe")
+adaptive_plot <- ggplot(adaptive_likelihood_table_long, aes(x=k, y=Paikannusvirhe, linetype=Algoritmi)) + geom_line(color="black") + geom_point(data=(adaptive_likelihood_table_long %>% subset(k %% 3 == 0)), aes(shape=Algoritmi), color="black") + ylim(0,5)
+
+grid.arrange(eachstep_plot, adaptive_plot, ncol=2)
+```
+
+```{r}
+# Koeasetelman kartta
+# Kerros kovakoodattuna polygonina
+floor_polygon <- "POLYGON (( 22.29453511085012 60.4483613949082752, 22.2946014103945416 60.4484048647438925, 22.2946353387669696 60.448391336179192, 22.2948368842480704 60.44851423830589, 22.2949309344403517 60.4484756693510974, 22.2948474192526227 60.4484273970519439, 22.2949762150528876 60.4483746483148394, 22.2948794145486353 60.4483188093082902, 22.2948949603596738 60.4482877395097233, 22.2949791172868608 60.4482523767460833, 22.2949032348697145 60.4482119549142709, 22.2947736689820957 60.4482661275728788, 22.2947533219121432 60.4482542293099314, 22.2947143172495998 60.4482694438414754, 22.2947224188828876 60.4482957453147307, 22.2946766563109158 60.448312592767202, 22.2946543735452032 60.4483107337472845, 22.29453511085012 60.4483613949082752))"
+floor_polygon <- readWKT(floor_polygon_wkt)
+no_of_coordinates <- length(floor_polygon@polygons[[1]]@Polygons[[1]]@coords[,1])
+starting_index <- 1
+floor_for_plotting <- as.data.frame(matrix(nrow=0, ncol=3))
+floor_for_plotting[starting_index:(starting_index+no_of_coordinates-1),1] <- floor_polygon@polygons[[1]]@Polygons[[1]]@coords[,1]
+floor_for_plotting[starting_index:(starting_index+no_of_coordinates-1),2] <- floor_polygon@polygons[[1]]@Polygons[[1]]@coords[,2]
+floor_for_plotting[starting_index:(starting_index+no_of_coordinates-1),3] <- rep(1, no_of_coordinates)
+colnames(floor_for_plotting) <- c("x", "y", "group")
+outside_x <- floor_polygon@bbox["x","min"]
+outside_y <- floor_polygon@bbox["y","max"]
+
+# Luodaan kartta
+site_map <- ggplot(zones_for_plotting, aes(group=id, x = (x+0.000113), y = (y-0.000131))) + geom_polygon(alpha=0.2) + xlab("") + ylab("") + geom_polygon(data=floor_for_plotting, aes(x=(x+0.000113), y=(y-0.000131), group=group), alpha=0.2)
+
+# Foculatorin sijainti
+site_map <- site_map + annotate("point", y=60.4481932096263, x=22.2948889620602, color="steelblue", size=3)
+locators_subset <- subset(locators, mac %in% locator_macs)
+
+# Paikantimien koordinaatit
+locators_xy <- locators_subset
+locators_xy$label <- as.character(1:nrow(locators_subset))
+locators_xy$x <- locators_xy$lon
+locators_xy$y <- locators_xy$lat
+
+# Kartta
+site_map <- site_map + geom_point(data=locators_xy, aes(x = x, y = y, fill = label), size = 5, colour="tomato") +  geom_text(data=locators_xy, aes(label = label, x = x, y = y), color="white", size=3) + guides(fill=guide_legend(keywidth=unit(0,"mm"), override.aes=list(size=0, colour=NA))) + scale_fill_discrete(labels=paste(1:nrow(locators_subset), "=", locators_xy$mac)) + labs(fill="XR-2 MAC")
+
+# Lisätään selitykset 
+site_map <- site_map + theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(6, 6, 6, 6)
+    ) + scale_color_manual(values = c(rep('tomato', 12)), name = 'XR-2-vastaanotin')
+```
+
